@@ -1,16 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-set -o errexit
-set -o nounset
-set -o pipefail
-if [[ "${TRACE-0}" == "1" ]]; then
-    set -o xtrace
-fi
-
-cd "$(dirname "\$0")"
-
-function usage() {
-    if [[ "${1-h}" =~ ^-*h(elp)?$ ]]; then
+show_usage_if_needed() {
+    first_arg="${1--h}"
+    if [ "$first_arg" = "-h" ] || [ "$first_arg" = "--help" ]; then
         cat <<EOF
 Usage:
 1. chatgpt system-message user-message
@@ -23,8 +15,8 @@ EOF
     fi
 }
 
-function check_requirements() {
-    if [[ -z "${OPENAI_API_KEY:+x}" ]]; then
+check_requirements() {
+    if [ -z "$OPENAI_API_KEY" ]; then
         cat <<'EOF'
 `$OPENAI_API_KEY' must be set, you can grab one from
 https://platform.openai.com/account/api-keys,
@@ -33,50 +25,52 @@ EOF
         exit 1
     fi
 
-    if ! command -v curl &>/dev/null; then
+    if ! command -v curl >/dev/null; then
         echo "\`curl' not found."
         exit 1
     fi
 
-    if ! command -v jq &>/dev/null; then
+    if ! command -v jq >/dev/null; then
         echo "\`jq' not found."
         exit 1
     fi
 }
 
-function format_sse_data() {
-    grep --line-buffered -v 'data: \[DONE\]' |
-        sed -u 's/data: //' |
-        jq --unbuffered -r '[.choices[].delta.content?] | join("")' |
+format_sse_data() {
+    sed -u 's/^data: //' |
+        jq --unbuffered -r '[.choices[].delta.content?] | join("")' 2>/dev/null |
         # output newline only if it's a newline
-        awk '{if ($0 == '\n' && NF == 0) { printf("\n") } else { printf("%s", $0) }}'
+        awk '{if ($0 == "" && NF == 0) { printf("\n") } else { printf("%s", $0) } fflush() }'
 }
 
-function request() {
-    if [[ $# -gt 1 ]]; then
-        local messages=$(jq --null-input \
+request() {
+    if [ $# -gt 1 ]; then
+        messages=$(jq --null-input \
             --arg sys_msg "$1" \
             --arg user_msg "$2" \
             '[{"role": "system", "content": $sys_msg}, {"role": "user", "content": $user_msg}]')
     else
-        local messages=$(jq --null-input \
+        messages=$(jq --null-input \
             --arg user_msg "$1" \
             '[{"role": "user", "content": $user_msg}]')
     fi
-    local body=$(
+
+    body=$(
         jq --null-input --argjson messages "$messages" \
             '{"model": "gpt-3.5-turbo", "messages": $messages, "stream": true}'
     )
-
-    curl -s --no-buffer https://api.openai.com/v1/chat/completions \
+    curl -s --no-buffer --http1.1 https://api.openai.com/v1/chat/completions \
         -H 'Content-Type: application/json' \
         -H "Authorization: Bearer $OPENAI_API_KEY" \
-        -d "$body" | tee >(format_sse_data) >/dev/null
+        -d "$body" |
+        while read -r event; do
+            format_sse_data "$event"
+        done
 }
 
-function main() {
+main() {
     check_requirements "$@"
-    usage "$@"
+    show_usage_if_needed "$@"
     request "$@"
 }
 
