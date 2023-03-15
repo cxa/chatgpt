@@ -1,5 +1,7 @@
 # chatgt
 
+☞ [中文](./README.zh_cn.md)
+
 ChatGPT in your terminal.
 
 ## Installation
@@ -26,4 +28,18 @@ You can alias some commands to use a fixed `system_message`:
 ```sh
 alias bashq='chatgpt "You are a BASH programming expert"'
 alias tcn='chatgpt "You are a English-to-Chinese technical document translation expert"'
+```
+
+### Format Output
+
+If you have formatting requirements for output, you can pipe the output to your
+defined format command. The following example shows how I use a line-wrapping
+program (`cargo install textwrap-cli`) in Rust to format the output.
+
+```sh
+chatgpt() {
+    colw=$(tput cols)
+    colw=$(( colw > 80 ? 80 : colw ))
+    command chatgpt "$@" | tw -w $colw -e '' -
+}
 ```

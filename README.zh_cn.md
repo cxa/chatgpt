@@ -1,5 +1,7 @@
 # chatgt
 
+☞ [Engilsh](./README.md)
+
 终端中的 ChatGPT。
 
 ## 安装
@@ -26,4 +28,16 @@ chatgpt system_message user_massage
 ```sh
 alias bashq='chatgpt "您是一位 BASH 编程专家"'
 alias tcn='chatgpt "您是一位中文到英文的技术文档翻译专家"'
+```
+
+### 格式化输出
+
+如果你对输出格式有要求，可以管道输出到你定义的格式命令。以下例子是我使用 Rust 中的一个断行程序（`cargo install textwrap-cli`）做输出。
+
+```sh
+chatgpt() {
+    colw=$(tput cols)
+    colw=$(( colw > 80 ? 80 : colw ))
+    command chatgpt "$@" | tw -w $colw -e '' -
+}
 ```
