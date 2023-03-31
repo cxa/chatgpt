@@ -1,12 +1,25 @@
 #!/bin/sh
 
+set -e
+
+die() {
+    printf "%s\n" "$1"
+    exit 1
+}
+
+depends() {
+    for dep in "$@"; do
+        command -v "$dep" >/dev/null || die "$dep not found"
+    done
+}
+
 show_usage_if_needed() {
-    first_arg="${1--h}"
+    first_arg="${1:--h}"
     if [ "$first_arg" = "-h" ] || [ "$first_arg" = "--help" ]; then
         cat <<EOF
 Usage:
 1. chatgpt system-message user-message
-e.g. chatgpt "You are a BASH professional" "Inverse regex in AWK?"
+e.g. chatgpt "You are a Shell professional" "Inverse regex in AWK?"
 
 2. chatgpt user-message
 e.g. chatgpt "Tell me the top 10 largest cities on the earth"
@@ -25,22 +38,19 @@ EOF
         exit 1
     fi
 
-    if ! command -v curl >/dev/null; then
-        echo "\`curl' not found."
-        exit 1
-    fi
-
-    if ! command -v jq >/dev/null; then
-        echo "\`jq' not found."
-        exit 1
-    fi
+    depends curl jq
 }
 
 format_sse_data() {
     sed -u 's/^data: //' |
-        jq --unbuffered -r '[.choices[].delta.content?] | join("")' 2>/dev/null |
+        jq --unbuffered -r '[.choices[].delta.content?] | join("")' \
+            2>/dev/null |
         # output newline only if it's a newline
-        awk '{if ($0 == "" && NF == 0) { printf("\n") } else { printf("%s", $0) } fflush() }'
+        awk '{
+	    if ($0 == "" && NF == 0) printf("\n"); \
+	    else printf("%s", $0); \
+	    fflush();
+	    }'
 }
 
 request() {
@@ -48,7 +58,8 @@ request() {
         messages=$(jq --null-input \
             --arg sys_msg "$1" \
             --arg user_msg "$2" \
-            '[{"role": "system", "content": $sys_msg}, {"role": "user", "content": $user_msg}]')
+            '[{"role": "system", "content": $sys_msg},
+	      {"role": "user", "content": $user_msg}]')
     else
         messages=$(jq --null-input \
             --arg user_msg "$1" \
